@@ -1,0 +1,61 @@
+# SIH26186 — Feature Engineering microservice, standalone dev compose.
+#
+# This spins up:
+#   1. feature-engineering-service — this component, on port 8001
+#   2. postgres — a local Postgres instance so the service can be tested
+#      against the real DB backend instead of the Excel prototype
+#      (matches the schema in the architecture doc: personnel, hr_records,
+#      wellness_assessments, biometric_data, consent_records, etc.)
+#
+# Your teammates' services (HR Data Service, Wellness Service, Biometric
+# Service, Risk Engine, API Gateway, etc.) are expected to join the same
+# Docker network in the team's top-level compose file — this file is scoped
+# to just this component so it's easy to drop into that larger setup.
+#
+# Usage:
+#   docker compose up --build
+#   curl -X POST http://localhost:8001/features/generate/3
+
+services:
+  feature-engineering-service:
+    build: .
+    container_name: sih26186-feature-engineering
+    ports:
+      - "8001:8001"
+    environment:
+      PGHOST: postgres
+      PGPORT: 5432
+      PGDATABASE: sih26186
+      PGUSER: postgres
+      PGPASSWORD: postgres_dev_only
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - sih26186-net
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: sih26186-postgres
+    environment:
+      POSTGRES_DB: sih26186
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres_dev_only
+    ports:
+      - "5432:5432"
+    volumes:
+      - sih26186-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - sih26186-net
+
+networks:
+  sih26186-net:
+    driver: bridge
+
+volumes:
+  sih26186-pgdata:
